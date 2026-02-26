@@ -6,12 +6,6 @@ on:
     branches:
       - master
 
-env:
-  AWS_DEFAULT_REGION: us-east-1
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  S3_PARAMS: --cache-control "public,must-revalidate,proxy-revalidate,max-age=0"
-
 jobs:
   linux:
     name: Linux
@@ -62,14 +56,11 @@ jobs:
         run: |
           source /opt/rh/gcc-toolset-15/enable || true
           cmake --build build --parallel
-          strip build/libopenal.so
       - name: Upload artifact
-        run: aws s3 cp build/libopenal.so s3://lwjgl-build/nightly/linux/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
-      - name: Upload git revision
-        run: |
-          git config --global --add safe.directory $PWD
-          git log --first-parent --pretty=format:%H --skip 1 -n 1 > libopenal.so.git
-          aws s3 cp libopenal.so.git s3://lwjgl-build/nightly/linux/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libopenal_linux_${{matrix.ARCH}}.so
+          path: build/libopenal.so
 
   linux-cross:
     name: Linux Cross
@@ -155,124 +146,8 @@ jobs:
           cmake --build build --parallel
           ${{matrix.TRIPLET}}-strip build/libopenal.so
       - name: Upload artifact
-        run: aws s3 cp build/libopenal.so s3://lwjgl-build/nightly/linux/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
-      - name: Upload git revision
-        run: |
-          git config --global --add safe.directory $(pwd)
-          git log --first-parent --pretty=format:%H --skip 1 -n 1 > libopenal.so.git
-          aws s3 cp libopenal.so.git s3://lwjgl-build/nightly/linux/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libopenal_linuxcross_${{matrix.ARCH}}.so
+          path: build/libopenal.so
 
-  freebsd-cross:
-    name: FreeBSD Cross
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 3
-      - name: Build
-        uses: cross-platform-actions/action@v0.32.0
-        with:
-          operating_system: freebsd
-          architecture: x86-64
-          version: '13.5'
-          memory: 4G
-          shell: bash
-          run: |
-            sudo pkg install -y cmake pkgconf gmake alsa-lib pulseaudio portaudio jackit dbus pipewire
-            cmake -B build \
-              -DALSOFT_REQUIRE_RTKIT=ON \
-              -DALSOFT_REQUIRE_ALSA=ON \
-              -DALSOFT_REQUIRE_OSS=ON \
-              -DALSOFT_REQUIRE_PORTAUDIO=ON \
-              -DALSOFT_REQUIRE_PULSEAUDIO=ON \
-              -DALSOFT_REQUIRE_JACK=ON \
-              -DALSOFT_REQUIRE_PIPEWIRE=ON \
-              -DALSOFT_EMBED_HRTF_DATA=YES \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0"
-            cmake --build build
-            strip build/libopenal.so
-      - name: Upload artifact
-        run: aws s3 cp build/libopenal.so s3://lwjgl-build/nightly/freebsd/x64/ ${{env.S3_PARAMS}}
-      - name: Upload git revision
-        run: |
-          git config --global --add safe.directory $PWD
-          git log --first-parent --pretty=format:%H --skip 1 -n 1 > libopenal.so.git
-          aws s3 cp libopenal.so.git s3://lwjgl-build/nightly/freebsd/x64/ ${{env.S3_PARAMS}}
-
-  macos:
-    name: macOS
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        ARCH: [x64, arm64]
-        include:
-          - ARCH: x64
-            CMAKE_PARAMS: -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DCMAKE_OSX_ARCHITECTURES=x86_64
-          - ARCH: arm64
-            CMAKE_PARAMS: -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_OSX_ARCHITECTURES=arm64
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 3
-      - name: Configure build
-        run: cmake -B build -DALSOFT_REQUIRE_COREAUDIO=ON -DALSOFT_EMBED_HRTF_DATA=YES -DCMAKE_BUILD_TYPE=Release ${{matrix.CMAKE_PARAMS}}
-      - name: Build
-        run: |
-          cmake --build build --parallel
-          strip -u -r build/libopenal.dylib
-      - name: Upload artifact
-        run: aws s3 cp build/libopenal.dylib s3://lwjgl-build/nightly/macosx/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
-      - name: Upload git revision
-        run: |
-          git log --first-parent --pretty=format:%H --skip 1 -n 1 > libopenal.dylib.git
-          aws s3 cp libopenal.dylib.git s3://lwjgl-build/nightly/macosx/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
-
-  windows:
-    name: Windows
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ARCH: [x86, x64, arm64]
-        include:
-          - ARCH: x86
-            PLATFORM: Win32
-            #VCTOOLS: x86.x64
-          - ARCH: x64
-            PLATFORM: x64
-            #VCTOOLS: x86.x64
-          - ARCH: arm64
-            PLATFORM: ARM64
-            #VCTOOLS: ARM64
-    defaults:
-      run:
-        shell: cmd
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 3
-#      - name: Install Visual Studio 2026 Build Tools
-#        shell: pwsh
-#        run: |
-#          choco install cmake
-#          choco install visualstudio2026buildtools --package-parameters "`
-#            --add Microsoft.VisualStudio.Workload.VCTools `
-#            --add Microsoft.VisualStudio.Component.VC.Tools.${{matrix.VCTOOLS}} `
-#            --includeRecommended `
-#            --quiet" `
-#            -y `
-#            --ignore-package-exit-codes=3010
-      - name: Configure build
-        #-T ClangCL
-        run: cmake -B build -G "Visual Studio 17 2022" -A ${{matrix.PLATFORM}} -DALSOFT_REQUIRE_WINMM=ON -DALSOFT_REQUIRE_DSOUND=ON -DALSOFT_REQUIRE_WASAPI=ON -DALSOFT_EMBED_HRTF_DATA=ON -DALSOFT_EAX=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
-      - name: Build
-        run: cmake --build build --parallel --config Release
-      - name: Upload artifact
-        run: aws s3 cp build\Release\OpenAL32.dll s3://lwjgl-build/nightly/windows/${{matrix.ARCH}}/OpenAL.dll ${{env.S3_PARAMS}}
-      - name: Upload git revision
-        run: |
-          git log --first-parent --pretty=format:%%H --skip 1 -n 1 > OpenAL.dll.git
-          aws s3 cp OpenAL.dll.git s3://lwjgl-build/nightly/windows/${{matrix.ARCH}}/ ${{env.S3_PARAMS}}
