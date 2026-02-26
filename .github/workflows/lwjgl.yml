@@ -144,10 +144,9 @@ jobs:
       - name: Build
         run: |
           cmake --build build --parallel
-          ${{matrix.TRIPLET}}-strip build/libopenal.so
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libopenal_linuxcross_${{matrix.ARCH}}.so
+          name: libopenal_linux_${{matrix.ARCH}}.so
           path: build/libopenal.so
 
