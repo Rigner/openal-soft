@@ -144,7 +144,7 @@ auto as_const_ptr(T *ptr) noexcept -> std::add_const_t<T>* { return ptr; }
 
 struct SpaHook : spa_hook {
     SpaHook() : spa_hook{} { }
-    ~SpaHook() { spa_hook_remove(this); }
+    ~SpaHook() { if (!!this->link.prev) spa_hook_remove(this); }
 
     void remove()
     {
