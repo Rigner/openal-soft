@@ -56,6 +56,7 @@ jobs:
         run: |
           source /opt/rh/gcc-toolset-15/enable || true
           cmake --build build --parallel
+          strip build/libopenal.so
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -144,6 +145,7 @@ jobs:
       - name: Build
         run: |
           cmake --build build --parallel
+          ${{matrix.TRIPLET}}-strip build/libopenal.so
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
